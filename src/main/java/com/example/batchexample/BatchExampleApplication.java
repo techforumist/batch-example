@@ -1,7 +1,10 @@
 package com.example.batchexample;
 
+import java.util.Date;
+
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.JobParameters;
+import org.springframework.batch.core.JobParametersBuilder;
 import org.springframework.batch.core.configuration.annotation.EnableBatchProcessing;
 import org.springframework.batch.core.launch.JobLauncher;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,9 +40,10 @@ class HomeController {
 
 	@GetMapping("/")
 	public String getOne() {
-		JobParameters jobParameters = new JobParameters();
+		String dateParam = new Date().toString();
+		JobParameters param = new JobParametersBuilder().addString("date", dateParam).toJobParameters();
 		try {
-			jobLauncher.run(job, jobParameters);
+			jobLauncher.run(job, param);
 		} catch (Exception e) {
 			e.printStackTrace();
 		}

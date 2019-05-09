@@ -7,6 +7,7 @@ import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
 import org.springframework.batch.core.configuration.annotation.JobBuilderFactory;
 import org.springframework.batch.core.configuration.annotation.StepBuilderFactory;
+import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.core.launch.support.RunIdIncrementer;
 import org.springframework.batch.item.ItemProcessor;
 import org.springframework.batch.item.ItemReader;
@@ -29,12 +30,17 @@ public class JobConfiguration {
 	@Autowired(required = true)
 	public StepBuilderFactory stepBuilderFactory;
 
-	List<String> input = new ArrayList<String>();
-
 	public JobConfiguration() {
+
+	}
+
+	public List<String> getInput() {
+		List<String> input = new ArrayList<String>();
 		for (int i = 0; i < 100; i++) {
 			input.add(i + " >> " + System.currentTimeMillis());
 		}
+
+		return input;
 	}
 
 	@Bean
@@ -66,23 +72,25 @@ public class JobConfiguration {
 				.build();
 	}
 
-	private ItemWriter<String> writer() {
+	@Bean
+	@StepScope
+	public ItemWriter<String> writer() {
 		return new ItemWriter<String>() {
 
 			@Override
 			public void write(List<? extends String> items) throws Exception {
-
 				try {
 					Thread.sleep(200);
 				} catch (Exception e) {
-					// TODO: handle exception
 				}
 				System.out.println(Thread.currentThread().getName() + " >> " + items.size() + " >> " + items);
 			}
 		};
 	}
 
-	private ItemProcessor<String, String> processor() {
+	@Bean
+	@StepScope
+	public ItemProcessor<String, String> processor() {
 		return new ItemProcessor<String, String>() {
 
 			@Override
@@ -92,8 +100,14 @@ public class JobConfiguration {
 		};
 	}
 
-	private ItemReader<String> reader() {
+	@Bean
+	@StepScope
+	public ItemReader<String> reader() {
+
+		List<String> input = getInput();
+
 		return new ItemReader<String>() {
+
 			@Override
 			public String read()
 					throws Exception, UnexpectedInputException, ParseException, NonTransientResourceException {
