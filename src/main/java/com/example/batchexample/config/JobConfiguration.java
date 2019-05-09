@@ -1,6 +1,7 @@
 package com.example.batchexample.config;
 
-import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
@@ -8,64 +9,99 @@ import org.springframework.batch.core.configuration.annotation.JobBuilderFactory
 import org.springframework.batch.core.configuration.annotation.StepBuilderFactory;
 import org.springframework.batch.core.launch.support.RunIdIncrementer;
 import org.springframework.batch.item.ItemProcessor;
-import org.springframework.batch.item.support.ListItemReader;
-import org.springframework.batch.repeat.RepeatStatus;
+import org.springframework.batch.item.ItemReader;
+import org.springframework.batch.item.ItemWriter;
+import org.springframework.batch.item.NonTransientResourceException;
+import org.springframework.batch.item.ParseException;
+import org.springframework.batch.item.UnexpectedInputException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.task.SimpleAsyncTaskExecutor;
+import org.springframework.core.task.TaskExecutor;
 
 @Configuration
-class JobConfiguration {
-	private final JobBuilderFactory jobBuilderFactory;
-	private final StepBuilderFactory stepBuilderFactory;
+public class JobConfiguration {
 
-	public JobConfiguration(JobBuilderFactory jobBuilderFactory, StepBuilderFactory stepBuilderFactory) {
-		this.jobBuilderFactory = jobBuilderFactory;
-		this.stepBuilderFactory = stepBuilderFactory;
+	@Autowired(required = true)
+	public JobBuilderFactory jobBuilderFactory;
+
+	@Autowired(required = true)
+	public StepBuilderFactory stepBuilderFactory;
+
+	List<String> input = new ArrayList<String>();
+
+	public JobConfiguration() {
+		for (int i = 0; i < 100; i++) {
+			input.add(i + " >> " + System.currentTimeMillis());
+		}
 	}
 
 	@Bean
-	Step step1() {
-		return stepBuilderFactory.get("step1").tasklet((contribution, chunkContext) -> {
-			System.out.println("Tasklet has run");
-			return RepeatStatus.FINISHED;
-		}).build();
+	public TaskExecutor taskExecutor() {
+		SimpleAsyncTaskExecutor asyncTaskExecutor = new SimpleAsyncTaskExecutor("spring_batch");
+		asyncTaskExecutor.setConcurrencyLimit(3);
+		return asyncTaskExecutor;
 	}
 
 	@Bean
-	Step step2() {
-		return stepBuilderFactory.get("step2").<String, String>chunk(3)
-				.reader(new ListItemReader<>(Arrays.asList("1", "2", "3", "4", "5", "6")))//
-
-				.processor(new ItemProcessor<String, String>() {
-					@Override
-					public String process(String item) throws Exception {
-						// TODO Auto-generated method stub
-						return String.valueOf(Integer.parseInt(item) * -1);
-					}
-				})//
-				.writer(items -> {
-					for (String item : items) {
-						System.out.println(">> " + item);
-					}
-				}).build();
-	}
-
-	@Bean(name = "firstJob")
-	Job job1() {
-		return this.jobBuilderFactory.get("job1").incrementer(new RunIdIncrementer()).start(step1()).next(step2())
+	public Job importUserJob(JobCompletionNotificationListener listener, Step step1) {
+		return jobBuilderFactory//
+				.get("importUserJob")//
+				.incrementer(new RunIdIncrementer())//
+				.listener(listener)//
+				.flow(step1)//
+				.end()//
 				.build();
 	}
 
 	@Bean
-	Step anotherStep() {
-		return this.stepBuilderFactory.get("anotherStep").tasklet((contribution, chunkContext) -> {
-			System.out.println("Yet another Tasklet!");
-			return RepeatStatus.FINISHED;
-		}).build();
+	public Step step1() {
+		return stepBuilderFactory.get("step1")//
+				.<String, String>chunk(3)//
+				.reader(reader())//
+				.processor(processor())//
+				.writer(writer())//
+				.taskExecutor(taskExecutor())//
+				.build();
 	}
 
-	@Bean(name = "secondJob")
-	Job job2() {
-		return this.jobBuilderFactory.get("job2").incrementer(new RunIdIncrementer()).start(anotherStep()).build();
+	private ItemWriter<String> writer() {
+		return new ItemWriter<String>() {
+
+			@Override
+			public void write(List<? extends String> items) throws Exception {
+
+				try {
+					Thread.sleep(200);
+				} catch (Exception e) {
+					// TODO: handle exception
+				}
+				System.out.println(Thread.currentThread().getName() + " >> " + items.size() + " >> " + items);
+			}
+		};
+	}
+
+	private ItemProcessor<String, String> processor() {
+		return new ItemProcessor<String, String>() {
+
+			@Override
+			public String process(String item) throws Exception {
+				return item;
+			}
+		};
+	}
+
+	private ItemReader<String> reader() {
+		return new ItemReader<String>() {
+			@Override
+			public String read()
+					throws Exception, UnexpectedInputException, ParseException, NonTransientResourceException {
+				if (!input.isEmpty()) {
+					return input.remove(0);
+				}
+				return null;
+			}
+		};
 	}
 }
